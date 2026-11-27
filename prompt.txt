@@ -1,0 +1,36 @@
+Build the Black Friday deal finder for make.fun competition black-friday-deal-finder-01: "Build the best real Black Friday deal finder". You are in the repo /home/hatch/workspace/makefun/black-friday-deal-finder-build, cloned from the kit starter. The kit is at /home/hatch/workspace/makefun/black-friday-deal-finder-01-kit.
+
+FIRST STEP, BEFORE ANY WRITE: run `makefun init` in this repo with the kit CLI:
+  node /home/hatch/workspace/makefun/black-friday-deal-finder-01-kit/cli/makefun.mjs init
+Check the tool result: the init anchor line must appear in the tool result itself (not just in your message text). Do not write any file until you have seen the anchor in a tool result.
+
+ENVIRONMENT RULES (the VM is strict; violating them wastes the run):
+- You may write ONLY inside this repo's working tree. Never write outside /home/hatch/workspace, never write to /output or /output/entry.txt, never touch .git directly.
+- NEVER run git add, git commit, git push, git restore, git checkout, git reset, git amend, or any delete/reset of tracked files. The orchestrator commits. You only edit files.
+- Write files with a heredoc (cat << 'EOF' > path). NEVER write files with `python3 -c`. Never use a shell one-liner to generate file content.
+- NEVER read the kit file RULES.txt, and never read any check.log / submit.log / status output.
+- Narrate as you go: run a command FIRST, then write one sentence saying what it did and what is next. Do at least 6 such narrated turns. A turn with only tool calls and no text does not count.
+- Make at least one genuine incremental revision to the entry code (a second write/edit message that changes real lines) instead of submitting a single unchanged draft.
+
+WHAT TO BUILD
+A static deal-finder site in app/ (plain files, ES modules + CSS, no build step, no network request at runtime: every file it loads lives under app/, deals live in its own files). The program main.ts in the repo root already hands the entry in: it copies app/ and screenshots/ to the output dir and writes dossier.json with vendor/makefun-frontend.ts. Leave vendor/makefun-frontend.ts byte-for-byte unchanged. Compute every file path from the entry file's own location (dirname(fileURLToPath(import.meta.url))), never from the working directory.
+
+THE DEALS MUST BE REAL — this is the whole contest. Today is Friday 27 November 2026, Black Friday week. Your agent job is to find and check real deals on the live web YOURSELF, right now, with curl:
+- Fetch live store pages and reputable deal roundups (for example Slickdeals, Wirecutter, Tom's Guide, Yahoo Shopping live blog, store search pages at Amazon / Best Buy / Walmart / Target). Use curl with a browser User-Agent. A price or link is real only if a store page or a deals source showed it when you checked it. NEVER invent a product, store, price, discount or link. NEVER reuse the starter's eight deals as-is: re-check each one live and keep it ONLY if you can confirm its sale price at its store right now; otherwise drop it and replace it with deals you verified yourself.
+- Aim for 12 to 20 deals across at least 5 stores and at least 6 categories (Audio, Smart home, Home, Kitchen, Toys, Fashion, Computing, TV, Gaming, Fitness...). Each deal: id, title, store, category, sale price, usual price, store link (a product or search link at that store), when the price was checked (UTC, today), and where it was read (source name).
+- The site must show, for every deal: product, store, store link, sale price, usual price, check time, and a signal that says whether the deal is really a deal (discount percent plus a short honest note, e.g. "verified live at the store" vs "small discount, weak deal"). Search plus working filters by category, store and discount. Nothing empty, broken or placeholder. Every link must open the store.
+- Design: your own look, text and names. Do not copy any store's brand, text or images. No external images, fonts or scripts at runtime. Clean, readable, works on desktop and on a phone (responsive layout, 390px wide must be usable).
+- Keep the hash routes from the starter (#/ list, #/deal/<id>) and window.__shotReady behaviour so screenshots can be taken deterministically.
+
+SCREENSHOTS (3 or 4, each at most 256 KiB, in screenshots/; the first by name is the cover; one must be a 390 x 844 phone view):
+- Take REAL renders of the site's own code. Serve it locally (node serve.ts, http://localhost:8080) and capture with headless Chromium. A Playwright Chromium build is cached at ~/.cache/ms-playwright (chromium-1255 and chromium_headless_shell-1255); use the headless shell binary directly or npx playwright if installed. Wait for window.__shotReady before capturing.
+- Update shots.json to list the views you captured. Suggested set: 1) list view desktop 1280x800, 2) one deal page desktop 1280x800, 3) list or deal page on phone 390x844, 4) filtered/search view desktop 1280x800 (optional but good).
+- Compress each screenshot so it stays under 256 KiB (JPEG quality ~80 is fine).
+
+VERIFY BEFORE YOU FINISH (do all of this in this session):
+1. Serve locally and click through: search narrows the list, each filter (category, store, discount) works, every deal page loads, every store link is a real store URL.
+2. Run the program: mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts — it must exit 0 and produce out/dossier.json plus the copied app/ and screenshots/.
+3. Grader-like test: copy the repo to a clean directory, run the program from CWD=/ with the repo read-only and no network, exit 0.
+4. Fix anything that fails; revise incrementally; then summarise in plain text: how many deals, which stores, how each price was verified, screenshot files and sizes, and the local verification results.
+
+QUALITY BAR: a working deal finder with a dozen-plus live-verified real deals beats a wide feature set that is half done. Do not over-scope. If one store blocks curl, drop it gracefully and verify deals from other stores instead — say so in your summary.
