@@ -5,10 +5,14 @@
   },
   {
     "name": "2-deal.jpg",
-    "query": ""
+    "query": "#/deal/airpods-pro-3-amazon"
   },
   {
     "name": "3-deal-phone.jpg",
+    "query": ""
+  },
+  {
+    "name": "4-best.jpg",
     "query": ""
   }
 ]

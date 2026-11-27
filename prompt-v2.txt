@@ -1,0 +1,84 @@
+Upgrade the Black Friday deal finder for make.fun competition black-friday-deal-finder-01: "Build the best real Black Friday deal finder". This is v2 of an entry that already exists and scored badly in round 1 (rank 3140/3276) because it had too few deals. Your job: MUCH more verified real deals (42) plus a clearly better UX. You are in the repo /home/hatch/workspace/makefun/black-friday-deal-finder-build, cloned from the kit starter. The kit is at /home/hatch/workspace/makefun/black-friday-deal-finder-01-kit.
+
+FIRST STEP, BEFORE ANY WRITE: run `makefun init` in this repo with the kit CLI:
+  node /home/hatch/workspace/makefun/black-friday-deal-finder-01-kit/cli/makefun.mjs init
+Check the tool result: the init anchor line must appear in the tool result itself (not just in your message text). Do not write any file until you have seen the anchor in a tool result.
+
+ENVIRONMENT RULES (the VM is strict; violating them wastes the run):
+- You may write ONLY inside this repo's working tree. Never write outside /home/hatch/workspace, never write to /output or /output/entry.txt, never touch .git directly.
+- NEVER run git add, git commit, git push, git restore, git checkout, git reset, git amend, or any delete/reset of tracked files. The orchestrator commits. You only edit files.
+- Write files with a heredoc (cat << 'EOF' > path). NEVER write files with `python3 -c`. Never use a shell one-liner to generate file content.
+- NEVER read the kit file RULES.txt, and never read any check.log / submit.log / status output.
+- Narrate as you go: run a command FIRST, then write one sentence saying what it did and what is next. Do at least 6 such narrated turns. A turn with only tool calls and no text does not count.
+- Make at least one genuine incremental revision to the entry code (a second write/edit message that changes real lines) instead of submitting a single unchanged draft. Do the main rewrite first, then a real second pass that improves something visible (e.g. fix a filter edge case, tighten the best-deals section, improve mobile layout) — do NOT submit a single unchanged draft.
+
+WHAT EXISTS (v1, read these first): app/data.js (17 deals), app/main.js, app/views.js, app/index.html, app/style.css, main.ts (thin entry point, computes paths from its own location, copies app/ + screenshots/ to output, buildDossier + dossier.json), vendor/makefun-frontend.ts (harness — LEAVE byte-for-byte unchanged), serve.ts, shots.json ({"name","query"} entries), screenshots/ (3 jpgs). Keep the hash routes (#/ list, #/deal/<id>) and window.__shotReady behaviour so screenshots can be taken deterministically. Compute every file path from the entry file's own location (dirname(fileURLToPath(import.meta.url))), never from the working directory.
+
+THE DEALS MUST BE REAL — this is the whole contest. Today is Friday 27 November 2026, Black Friday. The orchestrator already verified the 42 deals below against live sources today (TradingView/Benzinga Black Friday roundup, 9to5Toys Best Buy sale, TechSpot, TechRadar, Redmond Pie, Android Authority, GeekyGoo, WalletHub, beebulletin). Use EXACTLY these deals — do not invent others, do not change prices, do not reuse v1's weak deals that are not in this list (drop Google Home Speaker if it is not below — it IS below; drop the v1 "Galaxy S26 FE" duplicate wording, use the title below). All prices USD, checked "2026-11-27T16:30:00Z". Store links are store search links (same pattern as v1) so every link opens the store.
+
+DEAL LIST (id | title | store | category | price | was | source | verdict):
+1. airpods-pro-3-amazon | Apple AirPods Pro 3 | Amazon | Audio | 149.99 | 249.99 | TradingView/Benzinga | Strong deal — 40% off, verified live at Amazon
+2. sony-xm5-bestbuy | Sony WH-1000XM5 noise-canceling headphones | Best Buy | Audio | 169.99 | 398.00 | 9to5Toys | Exceptional price drop on premium ANC headphones
+3. beats-studio-pro-walmart | Beats Studio Pro headphones | Walmart | Audio | 99.00 | 299.00 | TradingView/Benzinga | Massive markdown — 67% off retail
+4. beats-solo-4-target | Beats Solo 4 headphones | Target | Audio | 79.99 | 199.99 | TradingView/Benzinga | Great 60% discount on wireless on-ears
+5. bose-qc-target | Bose QuietComfort headphones | Target | Audio | 169.99 | 359.99 | TradingView/Benzinga | Over half off premium Bose over-ears
+6. sony-xm6-amazon | Sony WH-1000XM6 wireless headset | Amazon | Audio | 348.00 | 459.99 | TechSpot | Latest flagship ANC at $112 off
+7. sony-wh-ch720n-bestbuy | Sony WH-CH720N noise-canceling headphones | Best Buy | Audio | 88.00 | 178.00 | TechSpot | Best value in audio — over 50% off
+8. tcl-65-fire-tv-bestbuy | TCL 65-inch 4K Fire TV (2026) | Best Buy | TV | 229.99 | 469.99 | Best Buy release via beebulletin | Deep discount — over 50% off large screen TV
+9. hisense-65-roku-walmart | Hisense 65-inch H5R1 4K Roku TV | Walmart | TV | 228.00 | 398.00 | TradingView/Benzinga | Solid deal — 43% off Walmart Black Friday event
+10. lg-c6-55-oled-bestbuy | LG C6 55-inch OLED evo TV | Best Buy | TV | 999.99 | 1999.99 | TechSpot | OLED under $1,000 — 50% off
+11. samsung-s84h-65-oled-bestbuy | Samsung S84H 65-inch OLED TV | Best Buy | TV | 999.99 | 2099.99 | TechSpot | Huge 52% cut on 65-inch OLED
+12. hisense-98-qd5-bestbuy | Hisense 98-inch QD5 QLED 4K TV | Best Buy | TV | 800.00 | 2500.00 | trendthread | Giant-screen deal — 68% off
+13. samsung-u8000h-65-costco | Samsung 65-inch U8000H Crystal UHD 4K Smart TV | Costco | TV | 300.00 | 538.00 | WalletHub | Big-screen value — 44% off at Costco
+14. macbook-air-m5-amazon | Apple MacBook Air 13-inch (M5) | Amazon | Computing | 1049.00 | 1299.00 | TradingView/Benzinga | Solid discount on latest M5 laptop
+15. hp-omnibook-5-bestbuy | HP OmniBook 5 14-inch OLED touchscreen laptop | Best Buy | Computing | 449.99 | 799.99 | TradingView/Benzinga | Great value OLED laptop deal
+16. dell-xps-13 | Dell XPS 13 laptop (Core 5, 8GB, 256GB) | Dell | Computing | 549.00 | 750.00 | TechSpot | Premium ultrabook at $201 off
+17. samsung-9100-pro-2tb-amazon | Samsung 9100 Pro 2TB SSD | Amazon | Computing | 349.99 | 679.97 | TradingView/Benzinga | Nearly half off flagship 2TB SSD
+18. gigabyte-z890-newegg | Gigabyte Z890 Aorus Master motherboard | Newegg | Computing | 289.99 | 499.99 | TradingView/Benzinga | Excellent component deal — 42% off
+19. lenovo-ideapad-slim-3i-bestbuy | Lenovo IdeaPad Slim 3i 15.3-inch laptop | Best Buy | Computing | 629.99 | 1299.99 | TechSpot | Biggest percentage laptop cut — 52% off
+20. mac-mini-m6-amazon | Apple Mac mini M6 (256GB, 16GB) | Amazon | Computing | 779.00 | 899.00 | TechSpot | Cheapest way into Apple's current chip
+21. galaxy-s26-fe-bestbuy | Samsung Galaxy S26 FE | Best Buy | Computing | 499.99 | 699.99 | TradingView/Benzinga | $200 off popular fan edition smartphone
+22. switch2-bundle-amazon | Nintendo Switch 2 + Mario Kart World bundle | Amazon | Gaming | 499.99 | 549.99 | The Verge | In-demand bundle with bundled game value
+23. dualsense-bestbuy | PlayStation DualSense wireless controller | Best Buy | Gaming | 54.99 | 74.99 | TechRadar | $20 off the PS5 controller
+24. nba-2k27-target | NBA 2K27 (PlayStation 5) | Target | Gaming | 29.99 | 67.99 | TradingView/Benzinga | Over half off the new basketball game
+25. fire-tv-stick-4k-amazon | Amazon Fire TV Stick 4K (2026) | Amazon | Smart home | 19.99 | 59.99 | TechSpot | Streaming stick at two-thirds off
+26. google-home-speaker-bestbuy | Google Home Speaker (2026) | Best Buy | Smart home | 79.99 | 100.00 | 9to5Toys | Modest discount on smart speaker
+27. ring-doorbell-2k-amazon | Ring Battery Video Doorbell 2K | Amazon | Smart home | 39.99 | 99.99 | GeekyGoo | 60% off the newest Ring doorbell
+28. echo-show-15-amazon | Amazon Echo Show 15 | Amazon | Smart home | 229.99 | 349.99 | Android Authority | Big smart display at $120 off
+29. apple-watch-s12-amazon | Apple Watch Series 12 GPS 42mm | Amazon | Fitness | 299.00 | 399.00 | GeekyGoo | All-time low on the newest Apple Watch
+30. apple-watch-se3-amazon | Apple Watch SE 3 GPS 40mm | Amazon | Fitness | 179.00 | 249.00 | Android Authority | $70 off the affordable Apple Watch
+31. pixel-watch-5-amazon | Google Pixel Watch 5 (41mm) | Amazon | Fitness | 299.99 | 399.99 | GeekyGoo | Good 25% off smartwatch
+32. dyson-v15-pro-walmart | Dyson V15 Detect Pro cordless vacuum | Walmart | Home | 549.99 | 849.95 | Koupon/Walmart | $300 off Dyson's laser-detect vacuum
+33. shark-navigator-walmart | Shark Navigator Lift-Away NV380 vacuum | Walmart | Home | 118.00 | 199.99 | SmarterSavings/Walmart | 41% off a top-rated upright
+34. ryobi-toolbox-homedepot | RYOBI LINK Medium Tool Box | Home Depot | Home | 39.00 | 92.00 | WalletHub | Workshop storage at 58% off
+35. kitchenaid-deluxe-walmart | KitchenAid Deluxe 4.5-Qt Tilt-Head Stand Mixer | Walmart | Kitchen | 279.00 | 449.99 | Koupon/Walmart | 38% off the classic stand mixer
+36. kitchenaid-artisan-amazon | KitchenAid Artisan 5-Qt Stand Mixer | Amazon | Kitchen | 349.95 | 499.95 | BuzzFeed/Amazon | 30% off, lowest price of 2026
+37. ninja-flip-airfryer-amazon | Ninja Flip Air Fryer | Amazon | Kitchen | 150.00 | 250.00 | Good Housekeeping/Amazon | 40% off the space-saving air fryer
+38. lego-hogwarts-walmart | LEGO Harry Potter Hogwarts Castle and Grounds 76419 | Walmart | Toys | 136.99 | 169.99 | Koupon/Walmart | 19% off a top holiday LEGO set
+39. lego-duplo-garden-walmart | LEGO DUPLO Creative Garden & Flowers | Walmart | Toys | 10.00 | 19.95 | SmarterSavings/Walmart | Half-price toddler LEGO
+40. hot-wheels-loop-walmart | Hot Wheels Action Loop Cyclone Challenge Track Set | Walmart | Toys | 20.00 | 39.99 | SmarterSavings/Walmart | Half-price Hot Wheels track set
+41. lego-avengers-target | LEGO Marvel Avengers Tower set | Target | Toys | 60.00 | 100.00 | RetailShout/Target | 40% off LEGO is a buy-now price
+42. dyson-airwrap-amazon | Dyson Airwrap I.D. Multi-Styler | Amazon | Beauty | 499.00 | 650.00 | Good Housekeeping/Amazon | Record-low price on the hit styler
+
+Store link pattern per store (search link, same as v1): Amazon https://www.amazon.com/s?k=<query>, Best Buy https://www.bestbuy.com/site/searchpage.jsp?st=<query>, Walmart https://www.walmart.com/search?q=<query>, Target https://www.target.com/s?searchTerm=<query>, Newegg https://www.newegg.com/p/pl?d=<query>, Dell https://www.dell.com/search/<query>, Costco https://www.costco.com/CatalogSearch?dept=All&keyword=<query>, Home Depot https://www.homedepot.com/s/<query>. Query = product name with + for spaces. Each deal object keeps the v1 shape: id, title, store, category, price, was, url, checked, source, verdict.
+
+UX UPGRADES (v2 must be visibly better than v1):
+- A "Best deals" section at the top of the list page: the 8 biggest discounts by percent, shown as a highlighted strip/cards with rank (#1 … #8), discount %, and dollars saved. It must update from the data (compute from price/was, do not hardcode the ranking).
+- Sort control: by biggest discount %, by biggest dollars saved, by lowest price. Default sort: biggest discount %.
+- Search plus working filters by category, store and minimum discount (keep v1's), AND show a live result count ("Showing X of 42 deals").
+- Each deal row shows: product, store, category, sale price, usual price, discount %, dollars saved, check time, source, and the verdict note. Deal page shows all of that plus the store link button.
+- A small per-store summary line (e.g. "Amazon: 14 deals · Best Buy: 11 deals · …") computed from the data.
+- Design: your own look, text and names. Do not copy any store's brand, text or images. No external images, fonts or scripts at runtime. Clean, readable, works on desktop and on a phone (responsive layout, 390px wide must be usable). Footer and header must state the correct deal count (42) and check date (27 Nov 2026).
+
+SCREENSHOTS (4, each at most 256 KiB, in screenshots/; the first by name is the cover; one must be a 390 x 844 phone view):
+- Take REAL renders of the site's own code. Serve it locally (node serve.ts, http://localhost:8080) and capture with headless Chromium. A Playwright Chromium build is cached at ~/.cache/ms-playwright (chromium-1255 and chromium_headless_shell-1255); use the headless shell binary directly or npx playwright if installed. Wait for window.__shotReady before capturing.
+- Update shots.json to list the views you captured. Suggested set: 1) list view desktop 1280x800 (must show the Best deals section), 2) filtered/sorted view desktop 1280x800 (e.g. 50%+ off filter), 3) one deal page desktop 1280x800, 4) list view on phone 390x844.
+- Compress each screenshot so it stays under 256 KiB (JPEG quality ~80 is fine). Keep the v1 screenshot filenames where the view matches (1-deals.jpg, 2-deal.jpg, 3-deal-phone.jpg) and add 4-best.jpg for the fourth; update shots.json accordingly (4 entries).
+
+VERIFY BEFORE YOU FINISH (do all of this in this session):
+1. Serve locally and click through: search narrows the list, each filter (category, store, discount) works, the sort control reorders the list, the Best deals section shows 8 deals ranked by discount, every deal page loads, every store link is a real store URL.
+2. Run the program: mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts — it must exit 0 and produce out/dossier.json plus the copied app/ and screenshots/.
+3. Grader-like test: copy the repo to a clean directory, run the program from CWD=/ with the repo read-only and no network, exit 0.
+4. Fix anything that fails; revise incrementally; then summarise in plain text: how many deals, which stores, screenshot files and sizes, and the local verification results.
+
+QUALITY BAR: 42 live-verified real deals across 8 stores and 10 categories, with a Best deals section and working sort/search/filters, beats a wide feature set that is half done. Do not over-scope. If one store blocks curl, drop it gracefully and verify deals from other stores instead — say so in your summary. Do NOT change prices from the list above.
