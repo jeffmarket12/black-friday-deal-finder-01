@@ -1,66 +1,71 @@
 import { deals } from './data.js';
-import { deal, list, missing, rows } from './views.js';
+import { deal as renderDealDetail, list as renderDealList, missing as renderNotFound, rows as renderDealRows } from './views.js';
 
-const app = document.getElementById('app');
+const rootElement = document.getElementById('app');
 
-function render() {
+function handleRouting() {
   window.__shotReady = false;
-  const match = location.hash.match(/^#\/deal\/([^/?]+)/);
-  if (match) {
-    const found = deals.find((d) => d.id === decodeURIComponent(match[1]));
-    document.title = `${found ? found.title : 'Not found'} | Black Friday Deal Finder 2026`;
-    app.innerHTML = found ? deal(found) : missing();
+  const dealRouteMatch = location.hash.match(/^#\/deal\/([^/?]+)/);
+
+  if (dealRouteMatch) {
+    const matchedDealId = decodeURIComponent(dealRouteMatch[1]);
+    const currentDeal = deals.find((entry) => entry.id === matchedDealId);
+    document.title = `${currentDeal ? currentDeal.title : 'Deal Not Found'} | Black Friday Deal Finder 2026`;
+    rootElement.innerHTML = currentDeal ? renderDealDetail(currentDeal) : renderNotFound();
   } else {
     document.title = 'Black Friday Deal Finder 2026';
-    let currentQuery = '';
-    let currentFilters = { category: '', store: '', minOff: 0 };
-    let currentSort = 'discount';
+    let searchQuery = '';
+    let filterCriteria = { category: '', store: '', minOff: 0 };
+    let activeSortOrder = 'discount';
 
-    app.innerHTML = list(deals, currentQuery, currentFilters, currentSort);
+    rootElement.innerHTML = renderDealList(deals, searchQuery, filterCriteria, activeSortOrder);
 
-    const searchInput = document.getElementById('search-input');
-    const catSelect = document.getElementById('filter-category');
-    const storeSelect = document.getElementById('filter-store');
-    const offSelect = document.getElementById('filter-off');
-    const sortSelect = document.getElementById('sort-by');
-    const dealsList = app.querySelector('.deals');
-    const dealCountEl = document.getElementById('deal-count');
+    const searchBox = document.getElementById('search-input');
+    const categorySelector = document.getElementById('filter-category');
+    const storeSelector = document.getElementById('filter-store');
+    const discountSelector = document.getElementById('filter-off');
+    const sortSelector = document.getElementById('sort-by');
+    const dealListContainer = rootElement.querySelector('.deals');
+    const counterBadge = document.getElementById('deal-count');
 
-    function updateList() {
-      currentQuery = searchInput.value;
-      currentFilters = {
-        category: catSelect.value,
-        store: storeSelect.value,
-        minOff: Number(offSelect.value) || 0,
+    function refreshView() {
+      searchQuery = searchBox.value;
+      filterCriteria = {
+        category: categorySelector.value,
+        store: storeSelector.value,
+        minOff: Number(discountSelector.value) || 0,
       };
-      currentSort = sortSelect.value;
-      dealsList.innerHTML = rows(deals, currentQuery, currentFilters, currentSort);
+      activeSortOrder = sortSelector.value;
+      dealListContainer.innerHTML = renderDealRows(deals, searchQuery, filterCriteria, activeSortOrder);
 
-      if (dealCountEl) {
-        const q = currentQuery.trim().toLowerCase();
-        const cat = currentFilters.category;
-        const store = currentFilters.store;
-        const minOff = currentFilters.minOff;
-        const shown = deals.filter((d) => {
-          const textMatch = q === '' || `${d.title} ${d.store} ${d.category} ${d.verdict || ''}`.toLowerCase().includes(q);
-          const catMatch = !cat || d.category === cat;
-          const storeMatch = !store || d.store === store;
-          const off = Math.round((1 - d.price / d.was) * 100);
-          return textMatch && catMatch && storeMatch && off >= minOff;
-        });
-        dealCountEl.textContent = shown.length;
+      if (counterBadge) {
+        const queryClean = searchQuery.trim().toLowerCase();
+        const catFilter = filterCriteria.category;
+        const storeFilter = filterCriteria.store;
+        const minDiscountFilter = filterCriteria.minOff;
+        
+        const visibleCount = deals.filter((entry) => {
+          const matchesText = queryClean === '' || `${entry.title} ${entry.store} ${entry.category} ${entry.verdict || ''}`.toLowerCase().includes(queryClean);
+          const matchesCategory = !catFilter || entry.category === catFilter;
+          const matchesStore = !storeFilter || entry.store === storeFilter;
+          const discountPercentage = Math.round((1 - entry.price / entry.was) * 100);
+          return matchesText && matchesCategory && matchesStore && discountPercentage >= minDiscountFilter;
+        }).length;
+
+        counterBadge.textContent = visibleCount;
       }
     }
 
-    if (searchInput) searchInput.addEventListener('input', updateList);
-    if (catSelect) catSelect.addEventListener('change', updateList);
-    if (storeSelect) storeSelect.addEventListener('change', updateList);
-    if (offSelect) offSelect.addEventListener('change', updateList);
-    if (sortSelect) sortSelect.addEventListener('change', updateList);
+    if (searchBox) searchBox.addEventListener('input', refreshView);
+    if (categorySelector) categorySelector.addEventListener('change', refreshView);
+    if (storeSelector) storeSelector.addEventListener('change', refreshView);
+    if (discountSelector) discountSelector.addEventListener('change', refreshView);
+    if (sortSelector) sortSelector.addEventListener('change', refreshView);
   }
+
   window.scrollTo(0, 0);
   window.__shotReady = true;
 }
 
-window.addEventListener('hashchange', render);
-render();
+window.addEventListener('hashchange', handleRouting);
+handleRouting();

@@ -1,179 +1,179 @@
-// HTML for each page, built from the deal data. Every value is escaped before it goes into the page.
+// Render module for Black Friday Deal Finder 2026.
+// Converts deal data into sanitized HTML fragments for list, filtering, sort, and detail views.
 
-const escape = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-const usd = (n) => `$${n.toLocaleString('en-US')}`;
-const percentOff = (d) => Math.round((1 - d.price / d.was) * 100);
-const dollarsSaved = (d) => Math.round(d.was - d.price);
-const day = (iso) => new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
+const sanitize = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
+const formatCurrency = (val) => `$${val.toLocaleString('en-US')}`;
+const calcDiscount = (item) => Math.round((1 - item.price / item.was) * 100);
+const calcSavings = (item) => Math.round(item.was - item.price);
+const formatTimestamp = (timestamp) => new Date(timestamp).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
 
-export function rows(deals, query, filters = {}, sortBy = 'discount') {
-  const q = query.trim().toLowerCase();
-  const cat = filters.category || '';
-  const store = filters.store || '';
-  const minOff = Number(filters.minOff) || 0;
+export function rows(dealCollection, queryStr, filterOpts = {}, sortMethod = 'discount') {
+  const searchTerm = queryStr.trim().toLowerCase();
+  const selectedCat = filterOpts.category || '';
+  const selectedStore = filterOpts.store || '';
+  const minimumDiscount = Number(filterOpts.minOff) || 0;
 
-  const shown = deals.filter((d) => {
-    const textMatch = q === '' || `${d.title} ${d.store} ${d.category} ${d.verdict || ''}`.toLowerCase().includes(q);
-    const catMatch = !cat || d.category === cat;
-    const storeMatch = !store || d.store === store;
-    const off = percentOff(d);
-    const offMatch = off >= minOff;
-    return textMatch && catMatch && storeMatch && offMatch;
+  const filteredCollection = dealCollection.filter((item) => {
+    const matchesQuery = searchTerm === '' || `${item.title} ${item.store} ${item.category} ${item.verdict || ''}`.toLowerCase().includes(searchTerm);
+    const matchesCat = !selectedCat || item.category === selectedCat;
+    const matchesStore = !selectedStore || item.store === selectedStore;
+    const discPct = calcDiscount(item);
+    const matchesDiscount = discPct >= minimumDiscount;
+    return matchesQuery && matchesCat && matchesStore && matchesDiscount;
   });
 
-  if (sortBy === 'savings') {
-    shown.sort((a, b) => dollarsSaved(b) - dollarsSaved(a));
-  } else if (sortBy === 'price') {
-    shown.sort((a, b) => a.price - b.price);
+  if (sortMethod === 'savings') {
+    filteredCollection.sort((a, b) => calcSavings(b) - calcSavings(a));
+  } else if (sortMethod === 'price') {
+    filteredCollection.sort((a, b) => a.price - b.price);
   } else {
-    // default: discount %
-    shown.sort((a, b) => percentOff(b) - percentOff(a));
+    filteredCollection.sort((a, b) => calcDiscount(b) - calcDiscount(a));
   }
 
-  if (shown.length === 0) return '<li class="no-match">No deals match your criteria. Try relaxing search or filters.</li>';
+  if (filteredCollection.length === 0) {
+    return '<li class="empty-notice">No deals found matching your filters. Try adjusting your criteria.</li>';
+  }
 
-  return shown
+  return filteredCollection
     .map(
-      (d) => `<li>
-  <div class="deal-main">
-    <a href="#/deal/${encodeURIComponent(d.id)}">${escape(d.title)}</a>
-    <div class="deal-meta">
-      <span class="badge store">${escape(d.store)}</span>
-      <span class="badge cat">${escape(d.category)}</span>
-      <span class="badge off">${percentOff(d)}% off</span>
-      <span class="badge savings">Save ${usd(dollarsSaved(d))}</span>
+      (item) => `<li>
+  <div class="card-primary">
+    <a href="#/deal/${encodeURIComponent(item.id)}">${sanitize(item.title)}</a>
+    <div class="tag-row">
+      <span class="tag merchant">${sanitize(item.store)}</span>
+      <span class="tag segment">${sanitize(item.category)}</span>
+      <span class="tag reduction">${calcDiscount(item)}% off</span>
+      <span class="tag cash-saved">Save ${formatCurrency(calcSavings(item))}</span>
     </div>
   </div>
-  <div class="deal-pricing">
-    <span class="price">${usd(d.price)}</span>
-    <span class="was"><s>${usd(d.was)}</s></span>
+  <div class="card-pricing">
+    <span class="current-price">${formatCurrency(item.price)}</span>
+    <span class="original-price"><s>${formatCurrency(item.was)}</s></span>
   </div>
-  <p class="verdict">${escape(d.verdict || 'Verified live')}</p>
+  <p class="expert-verdict">${sanitize(item.verdict || 'Live verified deal')}</p>
 </li>`,
     )
     .join('');
 }
 
-export function list(deals, query = '', filters = {}, sortBy = 'discount') {
-  const categories = Array.from(new Set(deals.map((d) => d.category))).sort();
-  const stores = Array.from(new Set(deals.map((d) => d.store))).sort();
+export function list(dealCollection, queryStr = '', filterOpts = {}, sortMethod = 'discount') {
+  const allCategories = Array.from(new Set(dealCollection.map((item) => item.category))).sort();
+  const allStores = Array.from(new Set(dealCollection.map((item) => item.store))).sort();
 
-  // Compute store counts for summary line
-  const storeCounts = {};
-  deals.forEach((d) => {
-    storeCounts[d.store] = (storeCounts[d.store] || 0) + 1;
+  const countsByStore = {};
+  dealCollection.forEach((item) => {
+    countsByStore[item.store] = (countsByStore[item.store] || 0) + 1;
   });
-  const storeSummaryText = Object.entries(storeCounts)
+  const storeSummaryString = Object.entries(countsByStore)
     .sort((a, b) => b[1] - a[1])
-    .map(([s, c]) => `${s}: ${c} deal${c > 1 ? 's' : ''}`)
+    .map(([storeName, count]) => `${storeName}: ${count} deal${count > 1 ? 's' : ''}`)
     .join(' · ');
 
-  // Compute Best Deals (top 8 by discount %)
-  const sortedByDiscount = [...deals].sort((a, b) => percentOff(b) - percentOff(a));
-  const top8 = sortedByDiscount.slice(0, 8);
+  const bestDealsSorted = [...dealCollection].sort((a, b) => calcDiscount(b) - calcDiscount(a));
+  const topEight = bestDealsSorted.slice(0, 8);
 
-  // Filtered shown count
-  const q = query.trim().toLowerCase();
-  const cat = filters.category || '';
-  const store = filters.store || '';
-  const minOff = Number(filters.minOff) || 0;
-  const shownCount = deals.filter((d) => {
-    const textMatch = q === '' || `${d.title} ${d.store} ${d.category} ${d.verdict || ''}`.toLowerCase().includes(q);
-    const catMatch = !cat || d.category === cat;
-    const storeMatch = !store || d.store === store;
-    return textMatch && catMatch && storeMatch && percentOff(d) >= minOff;
+  const searchTerm = queryStr.trim().toLowerCase();
+  const selectedCat = filterOpts.category || '';
+  const selectedStore = filterOpts.store || '';
+  const minimumDiscount = Number(filterOpts.minOff) || 0;
+
+  const currentShownCount = dealCollection.filter((item) => {
+    const matchesQuery = searchTerm === '' || `${item.title} ${item.store} ${item.category} ${item.verdict || ''}`.toLowerCase().includes(searchTerm);
+    const matchesCat = !selectedCat || item.category === selectedCat;
+    const matchesStore = !selectedStore || item.store === selectedStore;
+    return matchesQuery && matchesCat && matchesStore && calcDiscount(item) >= minimumDiscount;
   }).length;
 
   return `
-<div class="store-summary">
-  <p><strong>Retailer Breakdown:</strong> ${escape(storeSummaryText)}</p>
+<div class="merchant-overview">
+  <p><strong>Retailer Inventory:</strong> ${sanitize(storeSummaryString)}</p>
 </div>
 
-<div class="best-deals-section">
-  <h2>🌟 Top 8 Best Deals (Highest Discounts)</h2>
-  <div class="best-deals-grid">
-    ${top8.map((d, i) => `
-      <a class="best-card" href="#/deal/${encodeURIComponent(d.id)}">
-        <span class="best-rank">#${i + 1}</span>
-        <div class="best-info">
-          <strong>${escape(d.title)}</strong>
-          <span class="best-retailer">${escape(d.store)}</span>
+<div class="featured-strip">
+  <h2>🔥 Top 8 Premier Discounts</h2>
+  <div class="featured-grid">
+    ${topEight.map((item, index) => `
+      <a class="featured-item" href="#/deal/${encodeURIComponent(item.id)}">
+        <span class="rank-badge">Rank #${index + 1}</span>
+        <div class="featured-details">
+          <strong>${sanitize(item.title)}</strong>
+          <span class="featured-store">${sanitize(item.store)}</span>
         </div>
-        <div class="best-numbers">
-          <span class="best-pct">${percentOff(d)}% off</span>
-          <span class="best-save">Save ${usd(dollarsSaved(d))}</span>
-          <span class="best-price">${usd(d.price)}</span>
+        <div class="featured-numbers">
+          <span class="featured-pct">${calcDiscount(item)}% off</span>
+          <span class="featured-savings">Save ${formatCurrency(calcSavings(item))}</span>
+          <span class="featured-cost">${formatCurrency(item.price)}</span>
         </div>
       </a>
     `).join('')}
   </div>
 </div>
 
-<h1>All Verified Black Friday Deals</h1>
-<p class="subtitle">Showing <span id="deal-count">${shownCount}</span> of ${deals.length} deals. Verified live on 27 Nov 2026.</p>
+<h1>Black Friday Verified Deal Collection</h1>
+<p class="intro-note">Displaying <span id="deal-count">${currentShownCount}</span> of ${dealCollection.length} verified live deals. Checked November 27, 2026.</p>
 
-<div class="filters-bar">
-  <label class="search-label">Search <input type="search" id="search-input" value="${escape(query)}" placeholder="Search products, stores..."></label>
+<div class="control-panel">
+  <label class="control-search">Search Deals <input type="search" id="search-input" value="${sanitize(queryStr)}" placeholder="Search items, stores..."></label>
   <label>Category 
     <select id="filter-category">
       <option value="">All Categories</option>
-      ${categories.map((c) => `<option value="${escape(c)}" ${filters.category === c ? 'selected' : ''}>${escape(c)}</option>`).join('')}
+      ${allCategories.map((cat) => `<option value="${sanitize(cat)}" ${filterOpts.category === cat ? 'selected' : ''}>${sanitize(cat)}</option>`).join('')}
     </select>
   </label>
   <label>Store 
     <select id="filter-store">
-      <option value="">All Stores</option>
-      ${stores.map((s) => `<option value="${escape(s)}" ${filters.store === s ? 'selected' : ''}>${escape(s)}</option>`).join('')}
+      <option value="">All Retailers</option>
+      ${allStores.map((st) => `<option value="${sanitize(st)}" ${filterOpts.store === st ? 'selected' : ''}>${sanitize(st)}</option>`).join('')}
     </select>
   </label>
-  <label>Min Discount 
+  <label>Minimum Discount 
     <select id="filter-off">
-      <option value="0" ${!filters.minOff ? 'selected' : ''}>Any discount</option>
-      <option value="20" ${filters.minOff === 20 ? 'selected' : ''}>20%+ off</option>
-      <option value="40" ${filters.minOff === 40 ? 'selected' : ''}>40%+ off</option>
-      <option value="50" ${filters.minOff === 50 ? 'selected' : ''}>50%+ off</option>
+      <option value="0" ${!filterOpts.minOff ? 'selected' : ''}>Any discount</option>
+      <option value="20" ${filterOpts.minOff === 20 ? 'selected' : ''}>20%+ off</option>
+      <option value="40" ${filterOpts.minOff === 40 ? 'selected' : ''}>40%+ off</option>
+      <option value="50" ${filterOpts.minOff === 50 ? 'selected' : ''}>50%+ off</option>
     </select>
   </label>
-  <label>Sort By
+  <label>Sort Order
     <select id="sort-by">
-      <option value="discount" ${sortBy === 'discount' ? 'selected' : ''}>Biggest Discount %</option>
-      <option value="savings" ${sortBy === 'savings' ? 'selected' : ''}>Biggest Dollars Saved</option>
-      <option value="price" ${sortBy === 'price' ? 'selected' : ''}>Lowest Price</option>
+      <option value="discount" ${sortMethod === 'discount' ? 'selected' : ''}>Biggest Discount %</option>
+      <option value="savings" ${sortMethod === 'savings' ? 'selected' : ''}>Biggest Dollars Saved</option>
+      <option value="price" ${sortMethod === 'price' ? 'selected' : ''}>Lowest Price</option>
     </select>
   </label>
 </div>
-<ul class="deals">${rows(deals, query, filters, sortBy)}</ul>`;
+<ul class="deals">${rows(dealCollection, queryStr, filterOpts, sortMethod)}</ul>`;
 }
 
-export function deal(d) {
-  return `<div class="deal-detail">
-<p><a href="#/">&larr; Back to all deals</a></p>
-<h1>${escape(d.title)}</h1>
-<div class="deal-meta-large">
-  <span class="badge store">${escape(d.store)}</span>
-  <span class="badge cat">${escape(d.category)}</span>
-  <span class="badge off">${percentOff(d)}% off</span>
-  <span class="badge savings">Save ${usd(dollarsSaved(d))}</span>
+export function deal(item) {
+  return `<div class="detail-container">
+<p><a href="#/">&larr; Return to complete deal list</a></p>
+<h1>${sanitize(item.title)}</h1>
+<div class="tag-row-large">
+  <span class="tag merchant">${sanitize(item.store)}</span>
+  <span class="tag segment">${sanitize(item.category)}</span>
+  <span class="tag reduction">${calcDiscount(item)}% off</span>
+  <span class="tag cash-saved">Save ${formatCurrency(calcSavings(item))}</span>
 </div>
-<div class="price-box">
-  <span class="sale-price">${usd(d.price)}</span>
-  <span class="usual-price">Was <s>${usd(d.was)}</s></span>
+<div class="cost-display-box">
+  <span class="promo-price">${formatCurrency(item.price)}</span>
+  <span class="standard-price">Regular <s>${formatCurrency(item.was)}</s></span>
 </div>
-<p class="verdict-large"><strong>Deal Verification:</strong> ${escape(d.verdict || 'Verified live at store')}</p>
-<dl>
-  <dt>Store</dt><dd>${escape(d.store)}</dd>
-  <dt>Category</dt><dd>${escape(d.category)}</dd>
-  <dt>Price</dt><dd>${usd(d.price)}, usually ${usd(d.was)} (${percentOff(d)}% off, save ${usd(dollarsSaved(d))})</dd>
-  <dt>Checked At</dt><dd>${day(d.checked)}</dd>
-  <dt>Source</dt><dd>${escape(d.source)}</dd>
+<p class="verdict-banner"><strong>Verification Report:</strong> ${sanitize(item.verdict || 'Verified live at retailer')}</p>
+<dl class="specs-list">
+  <dt>Retailer</dt><dd>${sanitize(item.store)}</dd>
+  <dt>Category</dt><dd>${sanitize(item.category)}</dd>
+  <dt>Pricing</dt><dd>${formatCurrency(item.price)} (normally ${formatCurrency(item.was)} — ${calcDiscount(item)}% discount, saving ${formatCurrency(calcSavings(item))})</dd>
+  <dt>Verification Timestamp</dt><dd>${formatTimestamp(item.checked)}</dd>
+  <dt>Source Reference</dt><dd>${sanitize(item.source)}</dd>
 </dl>
-<p class="action-row"><a class="btn-store" href="${escape(d.url)}" rel="noopener" target="_blank">Find it at ${escape(d.store)} &rarr;</a></p>
+<p class="cta-row"><a class="store-link-btn" href="${sanitize(item.url)}" rel="noopener" target="_blank">Shop this deal at ${sanitize(item.store)} &rarr;</a></p>
 </div>`;
 }
 
 export function missing() {
-  return `<div class="not-found">
-<h1>Not found</h1>
-<p>There is no deal at this address. <a href="#/">See all deals</a>.</p>
+  return `<div class="error-container">
+<h1>Deal Not Found</h1>
+<p>The requested deal does not exist or has expired. <a href="#/">Browse all active deals</a>.</p>
 </div>`;
 }
