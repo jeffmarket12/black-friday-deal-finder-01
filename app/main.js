@@ -1,71 +1,107 @@
-import { deals } from './data.js';
-import { deal as renderDealDetail, list as renderDealList, missing as renderNotFound, rows as renderDealRows } from './views.js';
+// Client entry point for Black Friday Deal Finder v3
+// Manages reactive hash routing, filter state, event listeners, and footer store summaries.
 
-const rootElement = document.getElementById('app');
+import { getAllDeals } from './data.js';
+import { renderListView, renderDetailView } from './views.js';
 
-function handleRouting() {
-  window.__shotReady = false;
-  const dealRouteMatch = location.hash.match(/^#\/deal\/([^/?]+)/);
+const allDeals = getAllDeals();
 
-  if (dealRouteMatch) {
-    const matchedDealId = decodeURIComponent(dealRouteMatch[1]);
-    const currentDeal = deals.find((entry) => entry.id === matchedDealId);
-    document.title = `${currentDeal ? currentDeal.title : 'Deal Not Found'} | Black Friday Deal Finder 2026`;
-    rootElement.innerHTML = currentDeal ? renderDealDetail(currentDeal) : renderNotFound();
+const state = {
+  search: '',
+  category: '',
+  store: '',
+  minDiscount: '',
+  sort: 'percent'
+};
+
+function getRoute() {
+  const hash = window.location.hash || '#/';
+  if (hash.startsWith('#/deal/')) {
+    const id = hash.replace('#/deal/', '');
+    return { view: 'detail', id };
+  }
+  return { view: 'list' };
+}
+
+function renderApp() {
+  const root = document.getElementById('app-root');
+  const route = getRoute();
+
+  if (route.view === 'detail') {
+    const deal = allDeals.find(d => d.id === route.id);
+    root.innerHTML = renderDetailView(deal);
   } else {
-    document.title = 'Black Friday Deal Finder 2026';
-    let searchQuery = '';
-    let filterCriteria = { category: '', store: '', minOff: 0 };
-    let activeSortOrder = 'discount';
-
-    rootElement.innerHTML = renderDealList(deals, searchQuery, filterCriteria, activeSortOrder);
-
-    const searchBox = document.getElementById('search-input');
-    const categorySelector = document.getElementById('filter-category');
-    const storeSelector = document.getElementById('filter-store');
-    const discountSelector = document.getElementById('filter-off');
-    const sortSelector = document.getElementById('sort-by');
-    const dealListContainer = rootElement.querySelector('.deals');
-    const counterBadge = document.getElementById('deal-count');
-
-    function refreshView() {
-      searchQuery = searchBox.value;
-      filterCriteria = {
-        category: categorySelector.value,
-        store: storeSelector.value,
-        minOff: Number(discountSelector.value) || 0,
-      };
-      activeSortOrder = sortSelector.value;
-      dealListContainer.innerHTML = renderDealRows(deals, searchQuery, filterCriteria, activeSortOrder);
-
-      if (counterBadge) {
-        const queryClean = searchQuery.trim().toLowerCase();
-        const catFilter = filterCriteria.category;
-        const storeFilter = filterCriteria.store;
-        const minDiscountFilter = filterCriteria.minOff;
-        
-        const visibleCount = deals.filter((entry) => {
-          const matchesText = queryClean === '' || `${entry.title} ${entry.store} ${entry.category} ${entry.verdict || ''}`.toLowerCase().includes(queryClean);
-          const matchesCategory = !catFilter || entry.category === catFilter;
-          const matchesStore = !storeFilter || entry.store === storeFilter;
-          const discountPercentage = Math.round((1 - entry.price / entry.was) * 100);
-          return matchesText && matchesCategory && matchesStore && discountPercentage >= minDiscountFilter;
-        }).length;
-
-        counterBadge.textContent = visibleCount;
-      }
-    }
-
-    if (searchBox) searchBox.addEventListener('input', refreshView);
-    if (categorySelector) categorySelector.addEventListener('change', refreshView);
-    if (storeSelector) storeSelector.addEventListener('change', refreshView);
-    if (discountSelector) discountSelector.addEventListener('change', refreshView);
-    if (sortSelector) sortSelector.addEventListener('change', refreshView);
+    root.innerHTML = renderListView(allDeals, state, updateFilters);
+    bindListEvents();
   }
 
-  window.scrollTo(0, 0);
+  renderFooterSummary();
+
+  // Signal screenshot readiness to harness/puppeteer
   window.__shotReady = true;
 }
 
-window.addEventListener('hashchange', handleRouting);
-handleRouting();
+function updateFilters() {
+  const searchInput = document.getElementById('search-input');
+  const categorySelect = document.getElementById('category-select');
+  const storeSelect = document.getElementById('store-select');
+  const discountSelect = document.getElementById('discount-select');
+  const sortSelect = document.getElementById('sort-select');
+
+  if (searchInput) state.search = searchInput.value;
+  if (categorySelect) state.category = categorySelect.value;
+  if (storeSelect) state.store = storeSelect.value;
+  if (discountSelect) state.minDiscount = discountSelect.value;
+  if (sortSelect) state.sort = sortSelect.value;
+}
+
+function bindListEvents() {
+  const form = document.getElementById('filters-form');
+  if (!form) return;
+
+  form.addEventListener('input', () => {
+    updateFilters();
+    renderApp();
+  });
+
+  form.addEventListener('change', () => {
+    updateFilters();
+    renderApp();
+  });
+
+  const resetBtn = document.getElementById('reset-filters');
+  if (resetBtn) {
+    resetBtn.addEventListener('click', () => {
+      state.search = '';
+      state.category = '';
+      state.store = '';
+      state.minDiscount = '';
+      state.sort = 'percent';
+      renderApp();
+    });
+  }
+}
+
+function renderFooterSummary() {
+  const footer = document.getElementById('footer-summary');
+  if (!footer) return;
+
+  // Compute per-store counts
+  const storeCounts = {};
+  allDeals.forEach(d => {
+    storeCounts[d.store] = (storeCounts[d.store] || 0) + 1;
+  });
+
+  const storeSummaryText = Object.entries(storeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([st, count]) => `${st}: <span>${count} deals</span>`)
+    .join(' &bull; ');
+
+  footer.innerHTML = `
+    <div style="margin-bottom: 6px;">Per-store verified distribution: ${storeSummaryText}</div>
+    <div>Black Friday Deal Finder v3 &bull; 56 Verified Deals &bull; Checked 28 Nov 2026</div>
+  `;
+}
+
+window.addEventListener('hashchange', renderApp);
+window.addEventListener('DOMContentLoaded', renderApp);

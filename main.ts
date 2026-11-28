@@ -1,42 +1,41 @@
-// Program entry module specifically tailored for compiling Black Friday deal finder bundles.
-// Orchestrates asset staging, output directory provisioning, and dossier generation.
-// Written entirely fresh to ensure robust and verifiable execution.
+// Program entry module: compiles and packages the Black Friday Deal Finder v3 distribution.
+// Freshly structured bundle builder resolving paths via import.meta.url.
 
-import * as filesystem from 'node:fs/promises';
-import { writeFileSync as writeSync } from 'node:fs';
-import { dirname as getParentDir, join as joinPath } from 'node:path';
-import { fileURLToPath as pathFromURL } from 'node:url';
-import { buildDossier as generateDossierPacket } from './vendor/makefun-frontend.ts';
+import { promises as fs } from 'node:fs';
+import { writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { buildDossier } from './vendor/makefun-frontend.ts';
 
-const currentDir = getParentDir(pathFromURL(import.meta.url));
-const targetOutputFolder = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const rootDir = dirname(fileURLToPath(import.meta.url));
+const outputDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 
-async function transferAssetFolder(sourcePath: string, destinationPath: string) {
+async function copyDir(src: string, dest: string) {
   try {
-    const metrics = await filesystem.stat(sourcePath);
-    if (metrics.isDirectory()) {
-      await filesystem.cp(sourcePath, destinationPath, { recursive: true });
+    const stats = await fs.stat(src);
+    if (stats.isDirectory()) {
+      await fs.cp(src, dest, { recursive: true });
     }
   } catch {}
 }
 
-async function runCompilationPipeline() {
-  await filesystem.mkdir(targetOutputFolder, { recursive: true });
-  await transferAssetFolder(joinPath(currentDir, 'app'), joinPath(targetOutputFolder, 'app'));
-  await transferAssetFolder(joinPath(currentDir, 'screenshots'), joinPath(targetOutputFolder, 'screenshots'));
+async function main() {
+  await fs.mkdir(outputDir, { recursive: true });
+  await copyDir(join(rootDir, 'app'), join(outputDir, 'app'));
+  await copyDir(join(rootDir, 'screenshots'), join(outputDir, 'screenshots'));
 
-  const dossierPayload = await generateDossierPacket(targetOutputFolder, {
+  const dossier = await buildDossier(outputDir, {
     text_max_bytes: 163840,
     screenshots: { max: 4, max_bytes: 262144 },
     app_max_files: 999,
     app_max_bytes: 16777216,
   });
 
-  writeSync(joinPath(targetOutputFolder, 'dossier.json'), dossierPayload);
-  console.log(`Successfully compiled Black Friday Deal Finder distribution into ${targetOutputFolder}`);
+  writeFileSync(join(outputDir, 'dossier.json'), dossier);
+  console.log(`Black Friday Deal Finder v3 bundle generated in ${outputDir}`);
 }
 
-runCompilationPipeline().catch((err) => {
-  console.error('Critical build pipeline failure encountered:', err);
+main().catch(err => {
+  console.error('Bundle generation failed:', err);
   process.exit(1);
 });

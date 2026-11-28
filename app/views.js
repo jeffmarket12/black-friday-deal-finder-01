@@ -1,179 +1,242 @@
-// Render module for Black Friday Deal Finder 2026.
-// Converts deal data into sanitized HTML fragments for list, filtering, sort, and detail views.
+// Dynamic View Generators for Black Friday Deal Finder v3
+// Renders the Hero Deal, Top-10 Best Deals ranked by percent discount,
+// Computed Savings Summary, Filterable Deal List, and Deal Detail View.
 
-const sanitize = (text) => String(text).replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
-const formatCurrency = (val) => `$${val.toLocaleString('en-US')}`;
-const calcDiscount = (item) => Math.round((1 - item.price / item.was) * 100);
-const calcSavings = (item) => Math.round(item.was - item.price);
-const formatTimestamp = (timestamp) => new Date(timestamp).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
+export function renderListView(deals, filters, onFilterChange) {
+  // 1. Compute Hero Deal (single biggest dollar saving)
+  const heroDeal = [...deals].sort((a, b) => b.save - a.save)[0];
 
-export function rows(dealCollection, queryStr, filterOpts = {}, sortMethod = 'discount') {
-  const searchTerm = queryStr.trim().toLowerCase();
-  const selectedCat = filterOpts.category || '';
-  const selectedStore = filterOpts.store || '';
-  const minimumDiscount = Number(filterOpts.minOff) || 0;
+  // 2. Compute Top 10 Best Deals ranked by percent discount (then dollar save)
+  const top10Deals = [...deals]
+    .sort((a, b) => b.percent - a.percent || b.save - a.save)
+    .slice(0, 10);
 
-  const filteredCollection = dealCollection.filter((item) => {
-    const matchesQuery = searchTerm === '' || `${item.title} ${item.store} ${item.category} ${item.verdict || ''}`.toLowerCase().includes(searchTerm);
-    const matchesCat = !selectedCat || item.category === selectedCat;
-    const matchesStore = !selectedStore || item.store === selectedStore;
-    const discPct = calcDiscount(item);
-    const matchesDiscount = discPct >= minimumDiscount;
-    return matchesQuery && matchesCat && matchesStore && matchesDiscount;
+  // 3. Compute Savings Summary Bar metrics across all deals
+  const totalSaved = deals.reduce((acc, d) => acc + d.save, 0);
+  const avgPercent = Math.round(deals.reduce((acc, d) => acc + d.percent, 0) / deals.length);
+
+  // 4. Filter and sort deals for the main list view
+  const filteredDeals = deals.filter(deal => {
+    if (filters.search && !deal.title.toLowerCase().includes(filters.search.toLowerCase()) && !deal.store.toLowerCase().includes(filters.search.toLowerCase()) && !deal.category.toLowerCase().includes(filters.search.toLowerCase())) {
+      return false;
+    }
+    if (filters.category && deal.category !== filters.category) return false;
+    if (filters.store && deal.store !== filters.store) return false;
+    if (filters.minDiscount && deal.percent < Number(filters.minDiscount)) return false;
+    return true;
   });
 
-  if (sortMethod === 'savings') {
-    filteredCollection.sort((a, b) => calcSavings(b) - calcSavings(a));
-  } else if (sortMethod === 'price') {
-    filteredCollection.sort((a, b) => a.price - b.price);
-  } else {
-    filteredCollection.sort((a, b) => calcDiscount(b) - calcDiscount(a));
-  }
-
-  if (filteredCollection.length === 0) {
-    return '<li class="empty-notice">No deals found matching your filters. Try adjusting your criteria.</li>';
-  }
-
-  return filteredCollection
-    .map(
-      (item) => `<li>
-  <div class="card-primary">
-    <a href="#/deal/${encodeURIComponent(item.id)}">${sanitize(item.title)}</a>
-    <div class="tag-row">
-      <span class="tag merchant">${sanitize(item.store)}</span>
-      <span class="tag segment">${sanitize(item.category)}</span>
-      <span class="tag reduction">${calcDiscount(item)}% off</span>
-      <span class="tag cash-saved">Save ${formatCurrency(calcSavings(item))}</span>
-    </div>
-  </div>
-  <div class="card-pricing">
-    <span class="current-price">${formatCurrency(item.price)}</span>
-    <span class="original-price"><s>${formatCurrency(item.was)}</s></span>
-  </div>
-  <p class="expert-verdict">${sanitize(item.verdict || 'Live verified deal')}</p>
-</li>`,
-    )
-    .join('');
-}
-
-export function list(dealCollection, queryStr = '', filterOpts = {}, sortMethod = 'discount') {
-  const allCategories = Array.from(new Set(dealCollection.map((item) => item.category))).sort();
-  const allStores = Array.from(new Set(dealCollection.map((item) => item.store))).sort();
-
-  const countsByStore = {};
-  dealCollection.forEach((item) => {
-    countsByStore[item.store] = (countsByStore[item.store] || 0) + 1;
+  // Sort deals
+  filteredDeals.sort((a, b) => {
+    if (filters.sort === 'percent') return b.percent - a.percent || b.save - a.save;
+    if (filters.sort === 'savings') return b.save - a.save || b.percent - a.percent;
+    if (filters.sort === 'price-asc') return a.price - b.price;
+    return b.percent - a.percent;
   });
-  const storeSummaryString = Object.entries(countsByStore)
-    .sort((a, b) => b[1] - a[1])
-    .map(([storeName, count]) => `${storeName}: ${count} deal${count > 1 ? 's' : ''}`)
-    .join(' · ');
 
-  const bestDealsSorted = [...dealCollection].sort((a, b) => calcDiscount(b) - calcDiscount(a));
-  const topEight = bestDealsSorted.slice(0, 8);
-
-  const searchTerm = queryStr.trim().toLowerCase();
-  const selectedCat = filterOpts.category || '';
-  const selectedStore = filterOpts.store || '';
-  const minimumDiscount = Number(filterOpts.minOff) || 0;
-
-  const currentShownCount = dealCollection.filter((item) => {
-    const matchesQuery = searchTerm === '' || `${item.title} ${item.store} ${item.category} ${item.verdict || ''}`.toLowerCase().includes(searchTerm);
-    const matchesCat = !selectedCat || item.category === selectedCat;
-    const matchesStore = !selectedStore || item.store === selectedStore;
-    return matchesQuery && matchesCat && matchesStore && calcDiscount(item) >= minimumDiscount;
-  }).length;
+  const categories = [...new Set(deals.map(d => d.category))].sort();
+  const stores = [...new Set(deals.map(d => d.store))].sort();
 
   return `
-<div class="merchant-overview">
-  <p><strong>Retailer Inventory:</strong> ${sanitize(storeSummaryString)}</p>
-</div>
-
-<div class="featured-strip">
-  <h2>🔥 Top 8 Premier Discounts</h2>
-  <div class="featured-grid">
-    ${topEight.map((item, index) => `
-      <a class="featured-item" href="#/deal/${encodeURIComponent(item.id)}">
-        <span class="rank-badge">Rank #${index + 1}</span>
-        <div class="featured-details">
-          <strong>${sanitize(item.title)}</strong>
-          <span class="featured-store">${sanitize(item.store)}</span>
+    ${heroDeal ? `
+      <section class="hero-deal-card">
+        <div class="hero-tag">🔥 Deal of the Day — Biggest Dollar Saving</div>
+        <div class="hero-grid">
+          <div class="hero-content">
+            <h2>${escapeHtml(heroDeal.title)}</h2>
+            <div class="store-meta">Retailer: <strong>${escapeHtml(heroDeal.store)}</strong> &bull; Category: <strong>${escapeHtml(heroDeal.category)}</strong></div>
+            <p class="verdict">"${escapeHtml(heroDeal.verdict)}"</p>
+            <div class="hero-pricing">
+              <span class="hero-price">$${heroDeal.price.toFixed(2)}</span>
+              <span class="hero-was">$${heroDeal.was.toFixed(2)}</span>
+              <span class="hero-savings">Save $${heroDeal.save.toFixed(2)} (${heroDeal.percent}%)</span>
+            </div>
+          </div>
+          <div class="hero-action">
+            <a href="#/deal/${heroDeal.id}" class="btn btn-secondary">View Verification</a>
+            <a href="${escapeHtml(heroDeal.url)}" target="_blank" rel="noopener noreferrer" class="btn">Shop at ${escapeHtml(heroDeal.store)} &rarr;</a>
+          </div>
         </div>
-        <div class="featured-numbers">
-          <span class="featured-pct">${calcDiscount(item)}% off</span>
-          <span class="featured-savings">Save ${formatCurrency(calcSavings(item))}</span>
-          <span class="featured-cost">${formatCurrency(item.price)}</span>
+      </section>
+    ` : ''}
+
+    <section>
+      <div class="section-title">
+        <span>🏆 Top 10 Best Deals (Ranked by Discount)</span>
+      </div>
+      <div class="best-deals-grid">
+        ${top10Deals.map((deal, idx) => `
+          <a href="#/deal/${deal.id}" class="best-card">
+            <div class="rank-badge">#${idx + 1} &bull; ${deal.percent}% OFF</div>
+            <h3>${escapeHtml(deal.title)}</h3>
+            <div>
+              <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 4px;">${escapeHtml(deal.store)}</div>
+              <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                <span style="font-size: 1.15rem; font-weight: 800; color: var(--accent-green);">$${deal.price.toFixed(2)}</span>
+                <span style="font-size: 0.8rem; color: var(--accent-gold); font-weight: 700;">Save $${deal.save.toFixed(2)}</span>
+              </div>
+            </div>
+          </a>
+        `).join('')}
+      </div>
+    </section>
+
+    <section class="summary-bar">
+      <div class="summary-metric">
+        <div class="val">$${totalSaved.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+        <div class="lbl">Total Dollars Saved across 56 Deals</div>
+      </div>
+      <div class="summary-metric">
+        <div class="val">${avgPercent}%</div>
+        <div class="lbl">Average Discount Percent</div>
+      </div>
+      <div class="summary-metric">
+        <div class="val">${deals.length}</div>
+        <div class="lbl">Verified Live Deals</div>
+      </div>
+    </section>
+
+    <div class="filters-panel" id="filters-form">
+      <div class="filter-group">
+        <label for="search-input">Search Deals</label>
+        <input type="text" id="search-input" placeholder="Search product, store..." value="${escapeHtml(filters.search)}">
+      </div>
+      <div class="filter-group">
+        <label for="category-select">Category</label>
+        <select id="category-select">
+          <option value="">All Categories (${categories.length})</option>
+          ${categories.map(cat => `<option value="${cat}" ${filters.category === cat ? 'selected' : ''}>${cat}</option>`).join('')}
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="store-select">Retailer</label>
+        <select id="store-select">
+          <option value="">All Retailers (${stores.length})</option>
+          ${stores.map(st => `<option value="${st}" ${filters.store === st ? 'selected' : ''}>${st}</option>`).join('')}
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="discount-select">Minimum Discount</label>
+        <select id="discount-select">
+          <option value="">Any Discount</option>
+          <option value="20" ${filters.minDiscount === '20' ? 'selected' : ''}>20%+ Off</option>
+          <option value="40" ${filters.minDiscount === '40' ? 'selected' : ''}>40%+ Off</option>
+          <option value="50" ${filters.minDiscount === '50' ? 'selected' : ''}>50%+ Off</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label for="sort-select">Sort By</label>
+        <select id="sort-select">
+          <option value="percent" ${filters.sort === 'percent' ? 'selected' : ''}>Biggest Discount %</option>
+          <option value="savings" ${filters.sort === 'savings' ? 'selected' : ''}>Biggest Dollars Saved</option>
+          <option value="price-asc" ${filters.sort === 'price-asc' ? 'selected' : ''}>Lowest Price</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="results-status">
+      <span>Showing <strong>${filteredDeals.length}</strong> of ${deals.length} verified Black Friday deals</span>
+      <button id="reset-filters" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;">Reset Filters</button>
+    </div>
+
+    <div class="deals-table">
+      ${filteredDeals.length === 0 ? `
+        <div style="text-align: center; padding: 3rem; color: var(--text-muted); background: var(--bg-secondary); border-radius: 12px;">
+          <p style="font-size: 1.1rem; margin-bottom: 8px;">No matching deals found.</p>
+          <p style="font-size: 0.9rem;">Try adjusting your search terms or filter criteria.</p>
         </div>
-      </a>
-    `).join('')}
-  </div>
-</div>
-
-<h1>Black Friday Verified Deal Collection</h1>
-<p class="intro-note">Displaying <span id="deal-count">${currentShownCount}</span> of ${dealCollection.length} verified live deals. Checked November 27, 2026.</p>
-
-<div class="control-panel">
-  <label class="control-search">Search Deals <input type="search" id="search-input" value="${sanitize(queryStr)}" placeholder="Search items, stores..."></label>
-  <label>Category 
-    <select id="filter-category">
-      <option value="">All Categories</option>
-      ${allCategories.map((cat) => `<option value="${sanitize(cat)}" ${filterOpts.category === cat ? 'selected' : ''}>${sanitize(cat)}</option>`).join('')}
-    </select>
-  </label>
-  <label>Store 
-    <select id="filter-store">
-      <option value="">All Retailers</option>
-      ${allStores.map((st) => `<option value="${sanitize(st)}" ${filterOpts.store === st ? 'selected' : ''}>${sanitize(st)}</option>`).join('')}
-    </select>
-  </label>
-  <label>Minimum Discount 
-    <select id="filter-off">
-      <option value="0" ${!filterOpts.minOff ? 'selected' : ''}>Any discount</option>
-      <option value="20" ${filterOpts.minOff === 20 ? 'selected' : ''}>20%+ off</option>
-      <option value="40" ${filterOpts.minOff === 40 ? 'selected' : ''}>40%+ off</option>
-      <option value="50" ${filterOpts.minOff === 50 ? 'selected' : ''}>50%+ off</option>
-    </select>
-  </label>
-  <label>Sort Order
-    <select id="sort-by">
-      <option value="discount" ${sortMethod === 'discount' ? 'selected' : ''}>Biggest Discount %</option>
-      <option value="savings" ${sortMethod === 'savings' ? 'selected' : ''}>Biggest Dollars Saved</option>
-      <option value="price" ${sortMethod === 'price' ? 'selected' : ''}>Lowest Price</option>
-    </select>
-  </label>
-</div>
-<ul class="deals">${rows(dealCollection, queryStr, filterOpts, sortMethod)}</ul>`;
+      ` : filteredDeals.map(deal => `
+        <a href="#/deal/${deal.id}" class="deal-row">
+          <div class="deal-info">
+            <h4>${escapeHtml(deal.title)}</h4>
+            <div class="deal-meta-tags">
+              <span class="badge-store">${escapeHtml(deal.store)}</span>
+              <span class="badge-cat">${escapeHtml(deal.category)}</span>
+            </div>
+          </div>
+          <div class="deal-price-box">
+            <div class="sale">$${deal.price.toFixed(2)}</div>
+            <div class="was">Was $${deal.was.toFixed(2)}</div>
+          </div>
+          <div class="deal-saving-box">
+            <div class="percent">${deal.percent}% OFF</div>
+            <div class="dollars">Save $${deal.save.toFixed(2)}</div>
+          </div>
+          <div class="deal-verdict">
+            <p>"${escapeHtml(deal.verdict)}"</p>
+          </div>
+          <div>
+            <span class="btn btn-secondary" style="padding: 8px 14px; font-size: 0.85rem;">Inspect &rarr;</span>
+          </div>
+        </a>
+      `).join('')}
+    </div>
+  `;
 }
 
-export function deal(item) {
-  return `<div class="detail-container">
-<p><a href="#/">&larr; Return to complete deal list</a></p>
-<h1>${sanitize(item.title)}</h1>
-<div class="tag-row-large">
-  <span class="tag merchant">${sanitize(item.store)}</span>
-  <span class="tag segment">${sanitize(item.category)}</span>
-  <span class="tag reduction">${calcDiscount(item)}% off</span>
-  <span class="tag cash-saved">Save ${formatCurrency(calcSavings(item))}</span>
-</div>
-<div class="cost-display-box">
-  <span class="promo-price">${formatCurrency(item.price)}</span>
-  <span class="standard-price">Regular <s>${formatCurrency(item.was)}</s></span>
-</div>
-<p class="verdict-banner"><strong>Verification Report:</strong> ${sanitize(item.verdict || 'Verified live at retailer')}</p>
-<dl class="specs-list">
-  <dt>Retailer</dt><dd>${sanitize(item.store)}</dd>
-  <dt>Category</dt><dd>${sanitize(item.category)}</dd>
-  <dt>Pricing</dt><dd>${formatCurrency(item.price)} (normally ${formatCurrency(item.was)} — ${calcDiscount(item)}% discount, saving ${formatCurrency(calcSavings(item))})</dd>
-  <dt>Verification Timestamp</dt><dd>${formatTimestamp(item.checked)}</dd>
-  <dt>Source Reference</dt><dd>${sanitize(item.source)}</dd>
-</dl>
-<p class="cta-row"><a class="store-link-btn" href="${sanitize(item.url)}" rel="noopener" target="_blank">Shop this deal at ${sanitize(item.store)} &rarr;</a></p>
-</div>`;
+export function renderDetailView(deal) {
+  if (!deal) {
+    return `
+      <div style="text-align: center; padding: 4rem;">
+        <h2>Deal Not Found</h2>
+        <p style="color: var(--text-muted); margin: 1rem 0;">The requested deal ID could not be located in our catalog.</p>
+        <a href="#/" class="btn">&larr; Back to All Deals</a>
+      </div>
+    `;
+  }
+
+  return `
+    <div style="margin-bottom: 1.5rem;">
+      <a href="#/" class="btn btn-secondary">&larr; Back to All Deals</a>
+    </div>
+
+    <div class="deal-detail-view">
+      <div class="deal-detail-header">
+        <div class="deal-meta-tags" style="margin-bottom: 1rem;">
+          <span class="badge-store" style="font-size: 0.9rem; padding: 4px 10px;">${escapeHtml(deal.store)}</span>
+          <span class="badge-cat" style="font-size: 0.9rem; padding: 4px 10px;">${escapeHtml(deal.category)}</span>
+        </div>
+        <h2>${escapeHtml(deal.title)}</h2>
+        <p class="verdict" style="font-size: 1.1rem; color: var(--accent-cyan);">"${escapeHtml(deal.verdict)}"</p>
+      </div>
+
+      <div style="display: flex; gap: 20px; align-items: baseline; margin-bottom: 2rem; background: var(--bg-primary); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-color);">
+        <div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Sale Price</div>
+          <div style="font-size: 2.5rem; font-weight: 900; color: var(--accent-green);">$${deal.price.toFixed(2)}</div>
+        </div>
+        <div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Usual Price</div>
+          <div style="font-size: 1.25rem; text-decoration: line-through; color: var(--text-muted);">$${deal.was.toFixed(2)}</div>
+        </div>
+        <div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase;">Total Savings</div>
+          <div style="font-size: 1.5rem; font-weight: 800; color: var(--accent-gold);">$${deal.save.toFixed(2)} (${deal.percent}% off)</div>
+        </div>
+      </div>
+
+      <div class="verification-box">
+        <h3>Live Price Verification & Source</h3>
+        <ul>
+          <li>Retailer Source: <strong>${escapeHtml(deal.source)}</strong></li>
+          <li>Verified Check Time: <strong>${escapeHtml(deal.checked)}</strong></li>
+          <li>Live Deal Price: <strong>$${deal.price.toFixed(2)}</strong> (Compared against usual price of <strong>$${deal.was.toFixed(2)}</strong>)</li>
+          <li>Store Search URL: <a href="${escapeHtml(deal.url)}" target="_blank" rel="noopener noreferrer" style="color: var(--accent-cyan); word-break: break-all;">${escapeHtml(deal.url)}</a></li>
+        </ul>
+      </div>
+
+      <div style="display: flex; gap: 16px; margin-top: 2rem;">
+        <a href="${escapeHtml(deal.url)}" target="_blank" rel="noopener noreferrer" class="btn" style="flex: 1; justify-content: center; padding: 16px;">Open ${escapeHtml(deal.store)} Live Deal &rarr;</a>
+      </div>
+    </div>
+  `;
 }
 
-export function missing() {
-  return `<div class="error-container">
-<h1>Deal Not Found</h1>
-<p>The requested deal does not exist or has expired. <a href="#/">Browse all active deals</a>.</p>
-</div>`;
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
